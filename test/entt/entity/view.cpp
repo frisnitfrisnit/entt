@@ -502,14 +502,13 @@ TEST(SingleComponentView, Uninitialized) {
 
     ASSERT_EQ(view.begin(), view.end());
     ASSERT_EQ(view.rbegin(), view.rend());
-
     ASSERT_EQ(view.front(), static_cast<entt::entity>(entt::null));
     ASSERT_EQ(view.back(), static_cast<entt::entity>(entt::null));
 
     ASSERT_FALSE(view.contains(entt::entity{}));
     ASSERT_EQ(view.find(entt::entity{}), view.end());
 
-    ASSERT_NO_FATAL_FAILURE(view.each([](auto, auto) { FAIL(); }));
+    ASSERT_NO_FATAL_FAILURE(view.each([](auto...) { FAIL(); }));
     ASSERT_EQ(view.each().begin(), view.each().end());
 
     ASSERT_FALSE(view | entt::basic_view{storage});
@@ -1325,4 +1324,41 @@ TEST(MultiComponentView, Storage) {
     ASSERT_EQ(view.size_hint(), 0u);
     ASSERT_TRUE(view.storage<1u>().contains(entity));
     ASSERT_FALSE((registry.all_of<int, char>(entity)));
+}
+
+TEST(MultiComponentView, Uninitialized) {
+    entt::view<entt::get_t<int, double>> view{};
+    entt::storage<char> storage{};
+
+    ASSERT_FALSE(view);
+
+    ASSERT_FALSE(view.refresh());
+    ASSERT_FALSE(view.use<double>());
+
+    ASSERT_EQ(view.size_hint(), 0u);
+
+    ASSERT_EQ(view.begin(), view.end());
+    ASSERT_EQ(view.front(), static_cast<entt::entity>(entt::null));
+    ASSERT_EQ(view.back(), static_cast<entt::entity>(entt::null));
+
+    ASSERT_FALSE(view.contains(entt::entity{}));
+    ASSERT_EQ(view.find(entt::entity{}), view.end());
+
+    ASSERT_NO_FATAL_FAILURE(view.each([](auto...) { FAIL(); }));
+    ASSERT_EQ(view.each().begin(), view.each().end());
+
+    ASSERT_FALSE(view | entt::basic_view{storage});
+    ASSERT_FALSE(entt::basic_view{storage} | view);
+}
+
+ENTT_DEBUG_TEST(MultiComponentViewDeathTest, Uninitialized) {
+    entt::view<entt::get_t<int, double>> view{};
+
+    ASSERT_FALSE(view);
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get(entt::entity{}), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get<0>(entt::entity{}), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get<int>(entt::entity{}), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view[entt::entity{}], "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.storage<int>(), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.handle(), "");
 }
