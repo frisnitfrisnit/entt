@@ -493,6 +493,7 @@ TEST(SingleComponentView, Storage) {
 
 TEST(SingleComponentView, Uninitialized) {
     entt::view<entt::get_t<int>> view{};
+    entt::storage<char> storage{};
 
     ASSERT_FALSE(view);
 
@@ -511,7 +512,8 @@ TEST(SingleComponentView, Uninitialized) {
     ASSERT_NO_FATAL_FAILURE(view.each([](auto, auto) { FAIL(); }));
     ASSERT_EQ(view.each().begin(), view.each().end());
 
-    ASSERT_FALSE(view | entt::view<entt::get_t<char>>{});
+    ASSERT_FALSE(view | entt::basic_view{storage});
+    ASSERT_FALSE(entt::basic_view{storage} | view);
 }
 
 ENTT_DEBUG_TEST(SingleComponentViewDeathTest, Uninitialized) {
@@ -519,6 +521,8 @@ ENTT_DEBUG_TEST(SingleComponentViewDeathTest, Uninitialized) {
 
     ASSERT_FALSE(view);
     ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get(entt::entity{}), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get<0>(entt::entity{}), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get<int>(entt::entity{}), "");
     ASSERT_DEATH([[maybe_unused]] auto &&elem = view[entt::entity{}], "");
     ASSERT_DEATH([[maybe_unused]] auto &&elem = view.storage(), "");
     ASSERT_DEATH([[maybe_unused]] auto &&elem = view.handle(), "");
