@@ -548,6 +548,10 @@ class basic_view<get_t<Get>, exclude_t<>, std::void_t<std::enable_if_t<!componen
     template<typename, typename, typename>
     friend class basic_view;
 
+    [[nodiscard]] bool is_valid() const noexcept {
+        return std::get<0>(pools) != nullptr;
+    }
+
 public:
     /*! @brief Underlying entity identifier. */
     using entity_type = typename Get::entity_type;
@@ -609,6 +613,7 @@ public:
      */
     template<std::size_t Index>
     [[nodiscard]] decltype(auto) storage() const noexcept {
+        ENTT_ASSERT(is_valid(), "Uninitialized view");
         return *std::get<Index>(pools);
     }
 
@@ -617,7 +622,7 @@ public:
      * @return Number of entities that have the given component.
      */
     [[nodiscard]] size_type size() const noexcept {
-        return handle().size();
+        return is_valid() ? handle().size() : 0u;
     }
 
     /**
@@ -625,7 +630,7 @@ public:
      * @return True if the view is empty, false otherwise.
      */
     [[nodiscard]] bool empty() const noexcept {
-        return handle().empty();
+        return !is_valid() || handle().empty();
     }
 
     /**
@@ -637,7 +642,7 @@ public:
      * @return An iterator to the first entity of the view.
      */
     [[nodiscard]] iterator begin() const noexcept {
-        return handle().begin();
+        return is_valid() ? handle().begin() : iterator{};
     }
 
     /**
@@ -650,7 +655,7 @@ public:
      * @return An iterator to the entity following the last entity of the view.
      */
     [[nodiscard]] iterator end() const noexcept {
-        return handle().end();
+        return is_valid() ? handle().end() : iterator{};
     }
 
     /**
@@ -662,7 +667,7 @@ public:
      * @return An iterator to the first entity of the reversed view.
      */
     [[nodiscard]] reverse_iterator rbegin() const noexcept {
-        return handle().rbegin();
+        return is_valid() ? handle().rbegin() : reverse_iterator{};
     }
 
     /**
@@ -677,7 +682,7 @@ public:
      * reversed view.
      */
     [[nodiscard]] reverse_iterator rend() const noexcept {
-        return handle().rend();
+        return is_valid() ? handle().rend() : reverse_iterator{};
     }
 
     /**
@@ -731,7 +736,7 @@ public:
      * @return True if the view is properly initialized, false otherwise.
      */
     [[nodiscard]] explicit operator bool() const noexcept {
-        return std::get<0>(pools) != nullptr;
+        return is_valid();
     }
 
     /**
@@ -740,7 +745,7 @@ public:
      * @return True if the view contains the given entity, false otherwise.
      */
     [[nodiscard]] bool contains(const entity_type entt) const noexcept {
-        return handle().contains(entt);
+        return is_valid() && handle().contains(entt);
     }
 
     /**
@@ -794,17 +799,19 @@ public:
      */
     template<typename Func>
     void each(Func func) const {
-        if constexpr(is_applicable_v<Func, decltype(*each().begin())>) {
-            for(const auto pack: each()) {
-                std::apply(func, pack);
-            }
-        } else if constexpr(ignore_as_empty_v<typename Get::value_type>) {
-            for(size_type pos{}, last = size(); pos < last; ++pos) {
-                func();
-            }
-        } else {
-            for(auto &&component: storage()) {
-                func(component);
+        if(is_valid()) {
+            if constexpr(is_applicable_v<Func, decltype(*each().begin())>) {
+                for(const auto pack: each()) {
+                    std::apply(func, pack);
+                }
+            } else if constexpr(ignore_as_empty_v<typename Get::value_type>) {
+                for(size_type pos{}, last = size(); pos < last; ++pos) {
+                    func();
+                }
+            } else {
+                for(auto &&component: storage()) {
+                    func(component);
+                }
             }
         }
     }
@@ -819,7 +826,7 @@ public:
      * @return An iterable object to use to _visit_ the view.
      */
     [[nodiscard]] iterable each() const noexcept {
-        return storage().each();
+        return is_valid() ? storage().each() : iterable{};
     }
 
     /**
@@ -831,8 +838,8 @@ public:
      */
     template<typename... OGet, typename... OExclude>
     [[nodiscard]] auto operator|(const basic_view<get_t<OGet...>, exclude_t<OExclude...>> &other) const noexcept {
-        return std::make_from_tuple<basic_view<get_t<Get, OGet...>, exclude_t<OExclude...>>>(
-            std::apply([](auto *...curr) { return std::forward_as_tuple(*curr...); }, std::tuple_cat(pools, other.pools, other.filter)));
+        using return_type = basic_view<get_t<Get, OGet...>, exclude_t<OExclude...>>;
+        return (is_valid() && other) ? std::make_from_tuple<return_type>(std::apply([](auto *...curr) { return std::forward_as_tuple(*curr...); }, std::tuple_cat(pools, other.pools, other.filter))) : return_type{};
     }
 
 private:

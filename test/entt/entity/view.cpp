@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 #include <entt/entity/registry.hpp>
 #include <entt/entity/view.hpp>
+#include "../common/config.h"
 
 struct empty_type {};
 
@@ -488,6 +489,39 @@ TEST(SingleComponentView, Storage) {
     ASSERT_FALSE(view.storage<0u>().contains(entity));
     ASSERT_TRUE(cview.storage<const char>().contains(entity));
     ASSERT_FALSE((registry.all_of<int, char>(entity)));
+}
+
+TEST(SingleComponentView, Uninitialized) {
+    entt::view<entt::get_t<int>> view{};
+
+    ASSERT_FALSE(view);
+
+    ASSERT_TRUE(view.empty());
+    ASSERT_EQ(view.size(), 0u);
+
+    ASSERT_EQ(view.begin(), view.end());
+    ASSERT_EQ(view.rbegin(), view.rend());
+
+    ASSERT_EQ(view.front(), static_cast<entt::entity>(entt::null));
+    ASSERT_EQ(view.back(), static_cast<entt::entity>(entt::null));
+
+    ASSERT_FALSE(view.contains(entt::entity{}));
+    ASSERT_EQ(view.find(entt::entity{}), view.end());
+
+    ASSERT_NO_FATAL_FAILURE(view.each([](auto, auto) { FAIL(); }));
+    ASSERT_EQ(view.each().begin(), view.each().end());
+
+    ASSERT_FALSE(view | entt::view<entt::get_t<char>>{});
+}
+
+ENTT_DEBUG_TEST(SingleComponentViewDeathTest, Uninitialized) {
+    entt::view<entt::get_t<int>> view{};
+
+    ASSERT_FALSE(view);
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.get(entt::entity{}), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view[entt::entity{}], "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.storage(), "");
+    ASSERT_DEATH([[maybe_unused]] auto &&elem = view.handle(), "");
 }
 
 TEST(MultiComponentView, Functionalities) {
