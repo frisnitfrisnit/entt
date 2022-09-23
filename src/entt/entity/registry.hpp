@@ -501,8 +501,7 @@ public:
      * @return A pointer to the storage if it exists, a null pointer otherwise.
      */
     [[nodiscard]] base_type *storage(const id_type id) {
-        const auto it = pools.find(id);
-        return (it == pools.end()) ? nullptr : it->second.get();
+        return const_cast<base_type *>(std::as_const(*this).storage(id));
     }
 
     /**
