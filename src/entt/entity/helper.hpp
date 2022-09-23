@@ -126,13 +126,14 @@ void invoke(Registry &reg, const typename Registry::entity_type entt) {
  */
 template<typename Registry, typename Component>
 typename Registry::entity_type to_entity(const Registry &reg, const Component &instance) {
-    const auto &storage = reg.template storage<Component>();
-    const typename Registry::base_type &base = storage;
-    const auto *addr = std::addressof(instance);
+    if(const auto *storage = reg.template storage<Component>(); storage) {
+        const typename Registry::base_type *base = storage;
+        const auto *addr = std::addressof(instance);
 
-    for(auto it = base.rbegin(), last = base.rend(); it < last; it += component_traits<Component>::page_size) {
-        if(const auto dist = (addr - std::addressof(storage.get(*it))); dist >= 0 && dist < static_cast<decltype(dist)>(component_traits<Component>::page_size)) {
-            return *(it + dist);
+        for(auto it = base->rbegin(), last = base->rend(); it < last; it += component_traits<Component>::page_size) {
+            if(const auto dist = (addr - std::addressof(storage->get(*it))); dist >= 0 && dist < static_cast<decltype(dist)>(component_traits<Component>::page_size)) {
+                return *(it + dist);
+            }
         }
     }
 

@@ -31,7 +31,7 @@ class view_iterator final {
     [[nodiscard]] bool valid() const noexcept {
         return ((Get != 0u) || (*it != tombstone))
                && std::apply([entt = *it](const auto *...curr) { return (curr->contains(entt) && ...); }, pools)
-               && std::apply([entt = *it](const auto *...curr) { return (!curr->contains(entt) && ...); }, filter);
+               && !std::apply([entt = *it](const auto *...curr) { return ((curr && curr->contains(entt)) || ...); }, filter);
     }
 
 public:
@@ -216,7 +216,7 @@ class basic_view<get_t<Get...>, exclude_t<Exclude...>> {
     }
 
     [[nodiscard]] auto reject(const underlying_type entt) const noexcept {
-        return std::apply([entt](const auto *...curr) { return (curr->contains(entt) || ...); }, filter);
+        return std::apply([entt](const auto *...curr) { return ((curr && curr->contains(entt)) || ...); }, filter);
     }
 
     template<std::size_t Curr, typename Func, std::size_t... Index>
@@ -262,21 +262,21 @@ public:
     /**
      * @brief Constructs a multi-type view from a set of storage classes.
      * @param value The storage for the types to iterate.
-     * @param exclude The storage for the types used to filter the view.
+     * @param exclude Optional storage for the types used to filter the view.
      */
-    basic_view(Get &...value, Exclude &...exclude) noexcept
+    basic_view(Get &...value, Exclude *...exclude) noexcept
         : pools{&value...},
-          filter{&exclude...},
+          filter{exclude...},
           view{[](const base_type *first, const auto *...other) { ((first = other->size() < first->size() ? other : first), ...); return first; }(&value...)} {}
 
     /**
      * @brief Constructs a multi-type view from a set of storage classes.
      * @param value The storage for the types to iterate.
-     * @param exclude The storage for the types used to filter the view.
+     * @param exclude Optional storage for the types used to filter the view.
      */
-    basic_view(std::tuple<Get &...> value, std::tuple<Exclude &...> exclude = {}) noexcept
+    basic_view(std::tuple<Get &...> value, std::tuple<Exclude *...> exclude = {}) noexcept
         : pools{std::apply([](auto &...curr) { return std::make_tuple(&curr...); }, value)},
-          filter{std::apply([](auto &...curr) { return std::make_tuple(&curr...); }, exclude)},
+          filter{exclude},
           view{std::apply([](const base_type *first, const auto *...other) { ((first = other->size() < first->size() ? other : first), ...); return first; }, pools)} {}
 
     /**
@@ -419,7 +419,7 @@ public:
      * @return True if the view is properly initialized, false otherwise.
      */
     [[nodiscard]] explicit operator bool() const noexcept {
-        return is_valid();
+        return is_valid() && std::apply([](const auto *...curr) { return (curr && ...); }, filter);
     }
 
     /**
@@ -430,7 +430,7 @@ public:
     [[nodiscard]] bool contains(const entity_type entt) const noexcept {
         return is_valid()
                && std::apply([entt](const auto *...curr) { return (curr->contains(entt) && ...); }, pools)
-               && std::apply([entt](const auto *...curr) { return (!curr->contains(entt) && ...); }, filter);
+               && !std::apply([entt](const auto *...curr) { return ((curr && curr->contains(entt)) || ...); }, filter);
     }
 
     /**
@@ -525,7 +525,7 @@ public:
     template<typename... OGet, typename... OExclude>
     [[nodiscard]] auto operator|(const basic_view<get_t<OGet...>, exclude_t<OExclude...>> &other) const noexcept {
         using return_type = basic_view<get_t<Get..., OGet...>, exclude_t<Exclude..., OExclude...>>;
-        return (is_valid() && other) ? std::make_from_tuple<return_type>(std::apply([](auto *...curr) { return std::forward_as_tuple(*curr...); }, std::tuple_cat(pools, other.pools, filter, other.filter))) : return_type{};
+        return (is_valid() && other) ? return_type{std::apply([](auto *...curr) { return std::forward_as_tuple(*curr...); }, std::tuple_cat(pools, other.pools)), std::tuple_cat(filter, other.filter)} : return_type{};
     }
 
 private:
@@ -851,7 +851,7 @@ public:
     template<typename... OGet, typename... OExclude>
     [[nodiscard]] auto operator|(const basic_view<get_t<OGet...>, exclude_t<OExclude...>> &other) const noexcept {
         using return_type = basic_view<get_t<Get, OGet...>, exclude_t<OExclude...>>;
-        return (is_valid() && other) ? std::make_from_tuple<return_type>(std::apply([](auto *...curr) { return std::forward_as_tuple(*curr...); }, std::tuple_cat(pools, other.pools, other.filter))) : return_type{};
+        return (is_valid() && other) ? return_type{std::apply([](auto *...curr) { return std::forward_as_tuple(*curr...); }, std::tuple_cat(pools, other.pools)), other.filter} : return_type{};
     }
 
 private:
@@ -873,7 +873,7 @@ basic_view(Type &...storage) -> basic_view<get_t<Type...>, exclude_t<>>;
  * @tparam Exclude Types of components used to filter the view.
  */
 template<typename... Get, typename... Exclude>
-basic_view(std::tuple<Get &...>, std::tuple<Exclude &...> = {}) -> basic_view<get_t<Get...>, exclude_t<Exclude...>>;
+basic_view(std::tuple<Get &...>, std::tuple<Exclude *...> = {}) -> basic_view<get_t<Get...>, exclude_t<Exclude...>>;
 
 } // namespace entt
 

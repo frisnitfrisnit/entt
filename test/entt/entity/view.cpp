@@ -112,8 +112,8 @@ TEST(SingleComponentView, LazyTypeFromConstRegistry) {
     registry.emplace<empty_type>(entity);
     registry.emplace<int>(entity);
 
-    ASSERT_TRUE(cview);
-    ASSERT_TRUE(eview);
+    ASSERT_FALSE(cview);
+    ASSERT_FALSE(eview);
 
     ASSERT_TRUE(cview.empty());
     ASSERT_EQ(eview.size(), 0u);
@@ -622,7 +622,7 @@ TEST(MultiComponentView, LazyTypesFromConstRegistry) {
     registry.emplace<empty_type>(entity);
     registry.emplace<int>(entity);
 
-    ASSERT_TRUE(view);
+    ASSERT_FALSE(view);
 
     ASSERT_EQ(view.size_hint(), 0u);
     ASSERT_FALSE(view.contains(entity));
@@ -641,7 +641,7 @@ TEST(MultiComponentView, LazyExcludedTypeFromConstRegistry) {
 
     auto view = std::as_const(registry).view<const int>(entt::exclude<char>);
 
-    ASSERT_TRUE(view);
+    ASSERT_FALSE(view);
 
     ASSERT_EQ(view.size_hint(), 1u);
     ASSERT_TRUE(view.contains(entity));
@@ -1112,11 +1112,11 @@ TEST(MultiComponentView, DeductionGuide) {
     static_assert(std::is_same_v<entt::basic_view<entt::get_t<const entt::storage_type_t<int>, const entt::storage_type_t<double>>, entt::exclude_t<>>, decltype(entt::basic_view{std::forward_as_tuple(std::as_const(istorage), std::as_const(dstorage))})>);
     static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>, entt::storage_type_t<stable_type>>, entt::exclude_t<>>, decltype(entt::basic_view{std::forward_as_tuple(istorage, sstorage)})>);
 
-    static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>>, entt::exclude_t<entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(istorage), std::forward_as_tuple(dstorage)})>);
-    static_assert(std::is_same_v<entt::basic_view<entt::get_t<const entt::storage_type_t<int>>, entt::exclude_t<entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(std::as_const(istorage)), std::forward_as_tuple(dstorage)})>);
-    static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>>, entt::exclude_t<const entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(istorage), std::forward_as_tuple(std::as_const(dstorage))})>);
-    static_assert(std::is_same_v<entt::basic_view<entt::get_t<const entt::storage_type_t<int>>, entt::exclude_t<const entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(std::as_const(istorage)), std::forward_as_tuple(std::as_const(dstorage))})>);
-    static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>>, entt::exclude_t<entt::storage_type_t<stable_type>>>, decltype(entt::basic_view{std::forward_as_tuple(istorage), std::forward_as_tuple(sstorage)})>);
+    static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>>, entt::exclude_t<entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(istorage), std::make_tuple(&dstorage)})>);
+    static_assert(std::is_same_v<entt::basic_view<entt::get_t<const entt::storage_type_t<int>>, entt::exclude_t<entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(std::as_const(istorage)), std::make_tuple(&dstorage)})>);
+    static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>>, entt::exclude_t<const entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(istorage), std::make_tuple(&std::as_const(dstorage))})>);
+    static_assert(std::is_same_v<entt::basic_view<entt::get_t<const entt::storage_type_t<int>>, entt::exclude_t<const entt::storage_type_t<double>>>, decltype(entt::basic_view{std::forward_as_tuple(std::as_const(istorage)), std::make_tuple(&std::as_const(dstorage))})>);
+    static_assert(std::is_same_v<entt::basic_view<entt::get_t<entt::storage_type_t<int>>, entt::exclude_t<entt::storage_type_t<stable_type>>>, decltype(entt::basic_view{std::forward_as_tuple(istorage), std::make_tuple(&sstorage)})>);
 }
 
 TEST(MultiComponentView, IterableViewAlgorithmCompatibility) {
