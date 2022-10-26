@@ -32,7 +32,7 @@ it solves a problem but may not adapt well to other requirements that may arise
 from time to time.
 
 In case that the flexibility and power of an `std::function` isn't required or
-if the price to pay for them is too high,` EnTT` offers a complete set of
+if the price to pay for them is too high, `EnTT` offers a complete set of
 lightweight classes to solve the same and many other problems.
 
 # Delegate
@@ -168,7 +168,8 @@ Therefore, the function type must be declared explicitly for unbound members.
 The `delegate` class is meant to be used primarily with template arguments.
 However, as a consequence of its design, it can also offer minimal support for
 runtime arguments.<br/>
-When used in this modality, some feature aren't supported though. In particular:
+When used in this modality, some features aren't supported though. In
+particular:
 
 * Curried functions aren't accepted.
 * Functions with an argument list that differs from that of the delegate aren't
@@ -209,7 +210,7 @@ their nuances. The reason is pretty simple: a `delegate` isn't a drop-in
 replacement for an `std::function`. Instead, it tries to overcome the problems
 with the latter.<br/>
 That being said, non-capturing lambda functions are supported, even though some
-feature aren't available in this case.
+features aren't available in this case.
 
 This is a logical consequence of the support for connecting functions at
 runtime. Therefore, lambda functions undergo the same rules and
@@ -407,6 +408,8 @@ dispatcher.sink<an_event>().connect<&listener::receive>(listener);
 dispatcher.sink<another_event>().connect<&listener::method>(listener);
 ```
 
+Note that connecting listeners within event handlers can result in undefined
+behavior.<br/>
 The `disconnect` member function is used to remove one listener at a time or all
 of them at once:
 
@@ -480,8 +483,7 @@ Originally designed to fit the requirements of
 [`uvw`](https://github.com/skypjack/uvw) (a wrapper for `libuv` written in
 modern C++), it was adapted later to be included in this library.
 
-To create a custom emitter type, derived classes must inherit directly from the
-base class as:
+To create an emitter type, derived classes must inherit from the base as:
 
 ```cpp
 struct my_emitter: emitter<my_emitter> {
@@ -489,18 +491,10 @@ struct my_emitter: emitter<my_emitter> {
 }
 ```
 
-The full list of accepted types of events isn't required. Handlers are created
-internally on the fly and thus each type of event is accepted by default.
-
-Whenever an event is published, an emitter provides the listeners with a
-reference to itself along with a reference to the event. Therefore listeners
-have an handy way to work with it without incurring in the need of capturing a
-reference to the emitter itself.<br/>
-In addition, an opaque object is returned each time a connection is established
-between an emitter and a listener, allowing the caller to disconnect them at a
-later time.<br/>
-The opaque object used to handle connections is both movable and copyable. On
-the other side, an event emitter is movable but not copyable by default.
+Handlers for the different events are created internally on the fly. It's not
+required to specify in advance the full list of accepted events.<br/>
+Moreover, whenever an event is published, an emitter also passes a reference
+to itself to its listeners.
 
 To create new instances of an emitter, no arguments are required:
 
@@ -508,90 +502,54 @@ To create new instances of an emitter, no arguments are required:
 my_emitter emitter{};
 ```
 
-Listeners must be movable and callable objects (free functions, lambdas,
-functors, `std::function`s, whatever) whose function type is compatible with:
+Listeners are movable and callable objects (free functions, lambdas, functors,
+`std::function`s, whatever) whose function type is compatible with:
 
 ```cpp
-void(Event &, my_emitter &)
+void(Type &, my_emitter &)
 ```
 
-Where `Event` is the type of event they want to listen.<br/>
-There are two ways to attach a listener to an event emitter that differ
-slightly from each other:
-
-* To register a long-lived listener, use the `on` member function. It is meant
-  to register a listener designed to be invoked more than once for the given
-  event type.<br/>
-  As an example:
-
-  ```cpp
-  auto conn = emitter.on<my_event>([](const my_event &event, my_emitter &emitter) {
-      // ...
-  });
-  ```
-
-  The connection object can be freely discarded. Otherwise, it can be used later
-  to disconnect the listener if required.
-
-* To register a short-lived listener, use the `once` member function. It is
-  meant to register a listener designed to be invoked only once for the given
-  event type. The listener is automatically disconnected after the first
-  invocation.<br/>
-  As an example:
-
-  ```cpp
-  auto conn = emitter.once<my_event>([](const my_event &event, my_emitter &emitter) {
-      // ...
-  });
-  ```
-
-  The connection object can be freely discarded. Otherwise, it can be used later
-  to disconnect the listener if required.
-
-In both cases, the connection object can be used with the `erase` member
-function:
+Where `Type` is the type of event they want to receive.<br/>
+To attach a listener to an emitter, there exists the `on` member function:
 
 ```cpp
-emitter.erase(conn);
+emitter.on<my_event>([](const my_event &event, my_emitter &emitter) {
+    // ...
+});
 ```
 
-There are also two member functions to use either to disconnect all the
-listeners for a given type of event or to clear the emitter:
+Similarly, the `reset` member function is used to disconnect listeners given a
+type while `clear` is used to disconnect all listeners at once:
 
 ```cpp
-// removes all the listener for the specific event
-emitter.clear<my_event>();
+// resets the listener for my_event
+emitter.erase<my_event>();
 
-// removes all the listeners registered so far
-emitter.clear();
+// resets all listeners
+emitter.clear()
 ```
 
-To send an event to all the listeners that are interested in it, the `publish`
-member function offers a convenient approach that relieves users from having to
-create the event:
+To send an event to the listener registered on a given type, the `publish` is
+the way to go:
 
 ```cpp
 struct my_event { int i; };
 
 // ...
 
-emitter.publish<my_event>(42);
+emitter.publish(my_event{42});
 ```
 
-Finally, the `empty` member function tests if there exists at least either a
-listener registered with the event emitter or to a given type of event:
+Finally, the `empty` member function tests if there exists at least a listener
+registered with the event emitter while `contains` is used to check if a given
+event type is associated with a valid listener:
 
 ```cpp
-bool empty;
-
-// checks if there is any listener registered for the specific event
-empty = emitter.empty<my_event>();
-
-// checks it there are listeners registered with the event emitter
-empty = emitter.empty();
+if(emitter.contains<my_event>()) {
+    // ...
+}
 ```
 
-In general, the event emitter is a handy tool when the derived classes _wrap_
-asynchronous operations, because it introduces a _nice-to-have_ model based on
-events and listeners that kindly hides the complexity behind the scenes. However
-it is not limited to such uses.
+This class introduces a _nice-to-have_ model based on events and listeners.<br/>
+More in general, it's a handy tool when the derived classes _wrap_ asynchronous
+operations but it's not limited to such uses.

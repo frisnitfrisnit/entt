@@ -15,7 +15,7 @@ struct boxed_int {
     int value;
 };
 
-bool operator==(const boxed_int &lhs, const boxed_int &rhs) {
+inline bool operator==(const boxed_int &lhs, const boxed_int &rhs) {
     return lhs.value == rhs.value;
 }
 
@@ -196,7 +196,7 @@ TEST(NonOwningGroup, Each) {
     auto citerable = cgroup.each();
 
     ASSERT_NE(citerable.begin(), citerable.end());
-    ASSERT_NO_THROW(iterable.begin()->operator=(*iterable.begin()));
+    ASSERT_NO_FATAL_FAILURE(iterable.begin()->operator=(*iterable.begin()));
     ASSERT_EQ(decltype(iterable.end()){}, iterable.end());
 
     auto it = iterable.begin();
@@ -665,10 +665,10 @@ TEST(NonOwningGroup, Storage) {
     const auto entity = registry.create();
     const auto group = registry.group(entt::get<int, const char>);
 
-    static_assert(std::is_same_v<decltype(group.storage<0u>()), typename entt::storage_traits<entt::entity, int>::storage_type &>);
-    static_assert(std::is_same_v<decltype(group.storage<int>()), typename entt::storage_traits<entt::entity, int>::storage_type &>);
-    static_assert(std::is_same_v<decltype(group.storage<1u>()), const typename entt::storage_traits<entt::entity, char>::storage_type &>);
-    static_assert(std::is_same_v<decltype(group.storage<const char>()), const typename entt::storage_traits<entt::entity, char>::storage_type &>);
+    static_assert(std::is_same_v<decltype(group.storage<0u>()), entt::storage_type_t<int> &>);
+    static_assert(std::is_same_v<decltype(group.storage<int>()), entt::storage_type_t<int> &>);
+    static_assert(std::is_same_v<decltype(group.storage<1u>()), const entt::storage_type_t<char> &>);
+    static_assert(std::is_same_v<decltype(group.storage<const char>()), const entt::storage_type_t<char> &>);
 
     ASSERT_EQ(group.size(), 0u);
 
@@ -840,7 +840,7 @@ TEST(OwningGroup, Each) {
     auto citerable = cgroup.each();
 
     ASSERT_NE(citerable.begin(), citerable.end());
-    ASSERT_NO_THROW(iterable.begin()->operator=(*iterable.begin()));
+    ASSERT_NO_FATAL_FAILURE(iterable.begin()->operator=(*iterable.begin()));
     ASSERT_EQ(decltype(iterable.end()){}, iterable.end());
 
     auto it = iterable.begin();
@@ -1026,7 +1026,7 @@ TEST(OwningGroup, SortUnordered) {
 
 TEST(OwningGroup, SortWithExclusionList) {
     entt::registry registry;
-    auto group = registry.group<boxed_int>(entt::exclude<char>);
+    auto group = registry.group<boxed_int>({}, entt::exclude<char>);
 
     entt::entity entities[5]{};
     registry.create(std::begin(entities), std::end(entities));
@@ -1192,7 +1192,7 @@ TEST(OwningGroup, ExcludedComponents) {
     registry.emplace<int>(e1, 1);
     registry.emplace<char>(e1);
 
-    const auto group = registry.group<int>(entt::exclude<char, double>);
+    const auto group = registry.group<int>({}, entt::exclude<char, double>);
 
     const auto e2 = registry.create();
     registry.emplace<int>(e2, 2);
@@ -1263,8 +1263,8 @@ TEST(OwningGroup, EmptyAndNonEmptyTypes) {
 
 TEST(OwningGroup, TrackEntitiesOnComponentDestruction) {
     entt::registry registry;
-    const auto group = registry.group<int>(entt::exclude<char>);
-    const auto cgroup = std::as_const(registry).group_if_exists<const int>(entt::exclude<char>);
+    const auto group = registry.group<int>({}, entt::exclude<char>);
+    const auto cgroup = std::as_const(registry).group_if_exists<const int>({}, entt::exclude<char>);
 
     const auto entity = registry.create();
     registry.emplace<int>(entity);
@@ -1445,10 +1445,10 @@ TEST(OwningGroup, Storage) {
     const auto entity = registry.create();
     const auto group = registry.group<int>(entt::get<const char>);
 
-    static_assert(std::is_same_v<decltype(group.storage<0u>()), typename entt::storage_traits<entt::entity, int>::storage_type &>);
-    static_assert(std::is_same_v<decltype(group.storage<int>()), typename entt::storage_traits<entt::entity, int>::storage_type &>);
-    static_assert(std::is_same_v<decltype(group.storage<1u>()), const typename entt::storage_traits<entt::entity, char>::storage_type &>);
-    static_assert(std::is_same_v<decltype(group.storage<const char>()), const typename entt::storage_traits<entt::entity, char>::storage_type &>);
+    static_assert(std::is_same_v<decltype(group.storage<0u>()), entt::storage_type_t<int> &>);
+    static_assert(std::is_same_v<decltype(group.storage<int>()), entt::storage_type_t<int> &>);
+    static_assert(std::is_same_v<decltype(group.storage<1u>()), const entt::storage_type_t<char> &>);
+    static_assert(std::is_same_v<decltype(group.storage<const char>()), const entt::storage_type_t<char> &>);
 
     ASSERT_EQ(group.size(), 0u);
 

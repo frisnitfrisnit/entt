@@ -41,6 +41,7 @@
     * [One example to rule them all](#one-example-to-rule-them-all)
 * [Views and Groups](#views-and-groups)
   * [Views](#views)
+    * [Iteration order](#iteration-order)
     * [View pack](#view-pack)
     * [Runtime views](#runtime-views)
   * [Groups](#groups)
@@ -139,8 +140,8 @@ The registry to store, the views and the groups to iterate. That's all.
 The `entt::entity` type implements the concept of _entity identifier_. An entity
 (the _E_ of an _ECS_) is an opaque element to use as-is. Inspecting it isn't
 recommended since its format can change in future.<br/>
-Components (the _C_ of an _ECS_) are both move constructible and move assignable
-types. No need to register them nor their types.<br/>
+Components (the _C_ of an _ECS_) are of any type, without any constraints, not
+even that of being movable. No need to register them nor their types.<br/>
 Systems (the _S_ of an _ECS_) can be plain functions, functors, lambdas and so
 on. It's not required to announce them in any case and have no requirements.
 
@@ -486,7 +487,7 @@ At least as long as the `observer` isn't const. This means that the non-const
 overload of `each` does also reset the underlying data structure before to
 return to the caller, while the const overload does not for obvious reasons.
 
-The `collector` is an utility aimed to generate a list of `matcher`s (the actual
+The `collector` is a utility aimed to generate a list of `matcher`s (the actual
 rules) to use with an `observer` instead.<br/>
 There are two types of `matcher`s:
 
@@ -731,15 +732,15 @@ There are two aliases that use `entt::entity` as their default entity:
 Users can also easily create their own aliases for custom identifiers as:
 
 ```cpp
-using my_handle = entt::basic_handle<my_identifier>;
-using my_const_handle = entt::basic_handle<const my_identifier>;
+using my_handle = entt::basic_handle<entt::basic_registry<my_identifier>>;
+using my_const_handle = entt::basic_handle<const entt::basic_registry<my_identifier>>;
 ```
 
 Handles are also implicitly convertible to const handles out of the box but not
 the other way around.<br/>
 A handle stores a non-const pointer to a registry and therefore it can do all
-the things that can be done with a non-const registry. On the other hand, a
-const handles store const pointers to registries and offer a restricted set of
+the things that can be done with a non-const registry. On the other hand, const
+handles store const pointers to registries and offer a restricted set of
 functionalities.
 
 This class is intended to simplify function signatures. In case of functions
@@ -773,7 +774,7 @@ organizer.emplace(+[](const void *, entt::registry &) { /* ... */ });
 These are the parameters that a free function or a member function can accept:
 
 * A possibly constant reference to a registry.
-* An `entt::basic_view` with any possible combination of types.
+* An `entt::basic_view` with any possible combination of storage classes.
 * A possibly constant reference to any type `T` (that is, a context variable).
 
 The function type for free functions and decayed lambdas passed as parameters to
@@ -878,17 +879,23 @@ The context is returned via the `ctx` functions and offers a minimal set of
 feature including the following:
 
 ```cpp
-// creates a new context variable by type
+// creates a new context variable by type and returns it
 registry.ctx().emplace<my_type>(42, 'c');
 
-// creates a new context variable with a name
-registry.ctx().emplace_hint<my_type>("my_variable"_hs, 42, 'c');
+// creates a new named context variable by type and returns it
+registry.ctx().emplace_as<my_type>("my_variable"_hs, 42, 'c');
+
+// inserts or assigns a context variable by (deduced) type and returns it
+registry.ctx().insert_or_assign(my_type{42, 'c'});
+
+// inserts or assigns a named context variable by (deduced) type and returns it
+registry.ctx().insert_or_assign("my_variable"_hs, my_type{42, 'c'});
 
 // gets the context variable by type as a non-const reference from a non-const registry
-auto &var = registry.ctx().at<my_type>();
+auto &var = registry.ctx().get<my_type>();
 
 // gets the context variable by name as a const reference from either a const or a non-const registry
-const auto &cvar = registry.ctx().at<const my_type>("my_variable"_hs);
+const auto &cvar = registry.ctx().get<const my_type>("my_variable"_hs);
 
 // resets the context variable by type
 registry.ctx().erase<my_type>();
@@ -921,14 +928,19 @@ lvalue is necessarily provided as an argument:
 
 ```cpp
 time clock;
-registry.ctx().emplace<my_type &>(clock);
+registry.ctx().emplace<time &>(clock);
 ```
 
 Read-only aliased properties are created using const types instead:
 
 ```cpp
-registry.ctx().emplace<const my_type &>(clock);
+registry.ctx().emplace<const time &>(clock);
 ```
+
+Note that `insert_or_assign` doesn't support aliased properties and users must
+necessarily use `emplace` or `emplace_as` for this purpose.<br/>
+When `insert_or_assign` is used to update an aliased property, it _converts_
+the property itself into a non-aliased one.
 
 From the point of view of the user, there are no differences between a variable
 that is managed by the registry and an aliased property. However, read-only
@@ -937,7 +949,7 @@ variables aren't accessible as non-const references:
 ```cpp
 // read-only variables only support const access
 const my_type *ptr = registry.ctx().find<const my_type>();
-const my_type &var = registry.ctx().at<const my_type>();
+const my_type &var = registry.ctx().get<const my_type>();
 ```
 
 Aliased properties can be erased as it happens with any other variable.
@@ -954,10 +966,11 @@ makes it possible to use any type as a component, as long as its specialization
 of `component_traits` implements all the required functionalities.<br/>
 The non-specialized version of this class contains the following members:
 
-* `in_place_delete`: `Type::in_place_delete` if present, false otherwise.
-* `ignore_if_empty`: `Type::ignore_if_empty` if present, `ENTT_IGNORE_IF_EMPTY`
-  otherwise.
-* `page_size`: `Type::page_size` if present, `ENTT_PACKED_PAGE` otherwise.
+* `in_place_delete`: `Type::in_place_delete` if present, true for non-movable
+  types and false otherwise.
+
+* `page_size`: `Type::page_size` if present, `ENTT_PACKED_PAGE` for non-empty
+  types and 0 otherwise.
 
 Where `Type` is any type of component. All properties can be customized by
 specializing the above class and defining all its members, or by adding only
@@ -1223,7 +1236,7 @@ list is a consequence of a couple of design choices from the past and in the
 present:
 
 * First of all, there is no reason to force a user to serialize all the
-  components at once and most of the times it isn't desiderable. As an example,
+  components at once and most of the time it isn't desiderable. As an example,
   in case the stuff for the HUD in a game is put into the registry for some
   reasons, its components can be freely discarded during a serialization step
   because probably the software already knows how to reconstruct them correctly.
@@ -1558,6 +1571,46 @@ for(auto entity: view) {
 **Note**: prefer the `get` member function of a view instead of that of a
 registry during iterations to get the types iterated by the view itself.
 
+### Iteration order
+
+By default, a view is iterated along the pool that contains the smallest number
+of components.<br/>
+For example, if the registry contains fewer `velocity`s than it contains
+`position`s, then the order of the elements returned by the following view
+depends on how the `velocity` components are arranged in their pool:
+
+```cpp
+for(auto entity: registry.view<positon, velocity>()) { 
+    // ...
+}
+```
+
+Moreover, the order of types when constructing a view doesn't matter. Neither
+does the order of views in a view pack.<br/>
+However, it's possible to _enforce_ iteration of a view by given component order
+by means of the `use` function:
+
+```cpp
+for(auto entity : registry.view<position, velocity>().use<position>()) {
+    // ...
+}
+```
+
+On the other hand, if all a user wants is to iterate the elements in reverse
+order, this is possible for a single type view using its reverse iterators:
+
+```cpp
+auto view = registry.view<position>();
+
+for(auto it = view.rbegin(), last = view.rend(); it != last; ++iter) {
+    // ...
+}
+```
+
+Unfortunately, multi type views don't offer reverse iterators. Therefore, in
+this case it's a must to implement this functionality manually or to use single
+type views to lead the iteration.
+
 ### View pack
 
 Views are combined with each other to create new and more specific types.<br/>
@@ -1635,8 +1688,8 @@ useful in this regard.
 Groups are meant to iterate multiple components at once and to offer a faster
 alternative to multi type views.<br/>
 Groups overcome the performance of the other tools available but require to get
-the ownership of components and this sets some constraints on pools. On the
-other side, groups aren't an automatism that increases memory consumption,
+the ownership of components. This sets some constraints on the pools. On the
+other hand, groups aren't an automatism that increases memory consumption,
 affects functionalities and tries to optimize iterations for all the possible
 combinations of components. Users can decide when to pay for groups and to what
 extent.<br/>
@@ -1718,7 +1771,7 @@ registry during iterations to get the types iterated by the group itself.
 
 ### Full-owning groups
 
-A full-owning group is the fastest tool an user can expect to use to iterate
+A full-owning group is the fastest tool a user can expect to use to iterate
 multiple components at once. It iterates all the components directly, no
 indirection required. This type of groups performs more or less as if users are
 accessing sequentially a bunch of packed arrays of components all sorted
@@ -1733,7 +1786,7 @@ auto group = registry.group<position, velocity>();
 Filtering entities by components is also supported:
 
 ```cpp
-auto group = registry.group<position, velocity>(entt::exclude<renderable>);
+auto group = registry.group<position, velocity>({}, entt::exclude<renderable>);
 ```
 
 Once created, the group gets the ownership of all the components specified in
@@ -1842,7 +1895,7 @@ nested groups, an excluded component type `T` is treated as being an observed
 type `not_T`. Therefore, consider these two definitions:
 
 * `registry.group<sprite, transform>()`.
-* `registry.group<sprite, transform>(entt::exclude<rotation>)`.
+* `registry.group<sprite, transform>({}, entt::exclude<rotation>)`.
 
 They are treated as if users were defining the following groups:
 
@@ -1991,7 +2044,7 @@ iteration undergoes in-place deletion.<br/>
 As an example, consider the following snippet:
 
 ```cpp
-registry.view<position>([&](const auto entity, auto &pos) {
+registry.view<position>().each([&](const auto entity, auto &pos) {
     registry.emplace<position>(registry.create(), 0., 0.);
     // references remain stable after adding new instances
     pos.x = 0.;
@@ -2061,7 +2114,7 @@ groups or as free types with multi type views and groups in general.
 
 # Empty type optimization
 
-An empty type `T` is such that `std::is_empty_v<T>` returns true. They are also
+An empty type `T` is such that `std::is_empty_v<T>` returns true. They also are
 the same types for which _empty base optimization_ (EBO) is possible.<br/>
 `EnTT` handles these types in a special way, optimizing both in terms of
 performance and memory usage. However, this also has consequences that are worth
@@ -2078,11 +2131,10 @@ it is assigned to.
 
 More in general, none of the feature offered by the library is affected, but for
 the ones that require to return actual instances.<br/>
-This optimization can be disabled for the whole application by defining the
-`ENTT_NO_ETO` macro. In this case, empty types will be treated like all other
-types. Otherwise, users can also specialize the `component_traits` template
-class and in particular the `ignore_if_empty` alias, disabling this optimization
-for some types only.
+This optimization is disabled by defining the `ENTT_NO_ETO` macro. In this case,
+empty types are treated like all other types. Setting a page size at component
+level via the `component_traits` class template is another way to disable this
+optimization selectively rather than globally.
 
 # Multithreading
 
@@ -2129,7 +2181,7 @@ See the relevant documentation for more information.
 ## Iterators
 
 A special mention is needed for the iterators returned by views and groups. Most
-of the times they meet the requirements of random access iterators, in all cases
+of the time they meet the requirements of random access iterators, in all cases
 they meet at least the requirements of forward iterators.<br/>
 In other terms, they are suitable for use with the parallel algorithms of the
 standard library. If it's not clear, this is a great thing.
