@@ -11,3 +11,10 @@ cpp.hint
 
 # Bazel
 /bazel-*
+test/.DS_Store
+conan/.DS_Store
+docs/.DS_Store
+single_include/.DS_Store
+src/.DS_Store
+src/entt/.DS_Store
+.DS_Store
